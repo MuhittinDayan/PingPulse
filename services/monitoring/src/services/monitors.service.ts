@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { AppError } from '../errors/app-error';
 import { MonitorDocument, MonitorsRepository, isDuplicateKey } from '../repositories/monitors.repository';
+import type { MeasurementsRepository } from '../repositories/measurements.repository';
 import { isPrivateHost, normalizeUrl } from '../utils/url';
 import type { CreateMonitorInput } from '../validation/monitors.schemas';
 
@@ -15,6 +16,7 @@ export type MonitorView = {
 export class MonitorsService {
   constructor(
     private readonly monitors: MonitorsRepository,
+    private readonly measurements: MeasurementsRepository,
     private readonly allowPrivateTargets: boolean,
   ) {}
 
@@ -51,7 +53,16 @@ export class MonitorsService {
   // Başka şirketin monitor'ü de "bulunamadı" (404) döner: 403 kaynağın var olduğunu sızdırır.
   async remove(companyId: string, id: string): Promise<void> {
     const objectId = parseObjectId(id);
-    if (!objectId || !(await this.monitors.deleteById(companyId, objectId))) {
+    if (!objectId) {
+      throw new AppError(404, 'MONITOR_NOT_FOUND', 'Monitor not found');
+    }
+
+    // Önce monitor silinir ki worker onu tekrar claim edemesin, sonra ölçümleri.
+    // Ölçüm temizliği monitor bulunamasa da çalışır: önceki bir silme yarıda kaldıysa
+    // ya da worker silmeden hemen sonra ölçüm yazdıysa, tekrar edilen DELETE onları temizler.
+    const deleted = await this.monitors.deleteById(companyId, objectId);
+    await this.measurements.deleteByMonitor(companyId, objectId.toHexString());
+    if (!deleted) {
       throw new AppError(404, 'MONITOR_NOT_FOUND', 'Monitor not found');
     }
   }
