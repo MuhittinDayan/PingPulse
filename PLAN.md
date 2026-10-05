@@ -157,7 +157,7 @@ Index sıraları ESR kuralına göredir: önce eşitlik (`meta.monitorId`, `comp
 - API'ler token'ı `Authorization: Bearer` header'ından okur (Postman/curl ve servisler arası kullanım için en sade yol).
 - **Frontend'de token:** Bellekte tutulur (sayfa yenilenince yeniden giriş). localStorage'a yazılmaz, çünkü XSS durumunda çalınabilir. HttpOnly cookie + SameSite daha güvenli bir seçenek ama ek CSRF ve proxy kurulumu gerektiriyor, bilinen eksiklere yazılacak. [cookie-session-jwt-notlari §7]
 - `companyId` **her zaman JWT'den** okunur. Body, query veya path'te gelen companyId'ye asla güvenilmez.
-- Monitoring'deki her repository fonksiyonu `companyId` parametresini zorunlu alır. Filtresiz sorgu yazılamaz.
+- Monitoring'deki her repository fonksiyonu `companyId` parametresini zorunlu alır. Filtresiz sorgu yazılamaz. Tek istisna worker'ın sistem sorgusu `claimNextDue`: bütün şirketlerin zamanı gelmiş monitor'lerini sırayla alır ve API'den erişilemez.
 - Başka şirkete ait kaynak istenirse **404** döner (403 kaynağın var olduğunu sızdırır).
 - Şirketi bilen biri dışarıdan katılamaz. Yeni kullanıcıyı sadece o şirketin giriş yapmış bir kullanıcısı ekler.
 - Rol yok: şirketteki her kullanıcı aynı yetkiye sahip. **Bunun sonucu:** herhangi bir kullanıcı ödeme yapmadan planı ENTERPRISE yapabilir. Demo için kabul edilebilir, README'de açıkça belirtilecek.
@@ -188,14 +188,16 @@ loop (her WORKER_TICK_MS):
 - **`scheduleLagMs`:** Planlanan zaman ile gerçek başlangıç arasındaki fark. Toplu kesintide oluşan gecikmeyi görünür kılar.
 - **Graceful shutdown:** SIGTERM gelince yeni claim yapılmaz, devam eden istekler bitince process kapanır.
 - Ölçümler `insertOne` ile anında yazılır. Buffer kullanılmadığı için çökmede veri kaybı olmaz. `insertMany` ile toplu yazmak daha verimli, ama bizim yazma hızımız (saniyede birkaç ölçüm) MongoDB için çok düşük. Sadelik ve veri güvenliği tercih edildi. [TSDB-Retention §18]
-- **DNS ve thread pool:** `dns.lookup` libuv thread pool'unu kullanır (varsayılan 4 thread). N=10 kontrolde yavaş yanıt veren bir DNS sunucusu 4 thread'i de meşgul ederse diğer URL'ler DNS sırasında bekler. Bu durum diğer kontrollerin DNS çözümlemesini geciktirir. Bu yüzden worker'da `UV_THREADPOOL_SIZE` değeri `CHECK_CONCURRENCY` değerinden büyük ya da eşit ayarlanır (compose'da `max(4, N)`). [Nodejs-Calisma-Mantigi §11]
+- **DNS ve thread pool:** `dns.lookup` libuv thread pool'unu kullanır (varsayılan 4 thread). N=10 kontrolde yavaş yanıt veren bir DNS sunucusu 4 thread'i de meşgul ederse diğer URL'ler DNS sırasında bekler. Bu durum diğer kontrollerin DNS çözümlemesini geciktirir. Bu yüzden worker'da `UV_THREADPOOL_SIZE` değeri `CHECK_CONCURRENCY` değerinden büyük ya da eşit olmalıdır. Pool boyutu process başladıktan sonra değiştirilemediği için worker açılışta bu koşulu doğrular, sağlanmıyorsa açılmaz (fail-fast). Compose varsayılanı 16. [Nodejs-Calisma-Mantigi §11]
+- **Doğrulama (Faz 5, elle):** N=5, aralık 10 sn, timeout 2 sn, 28 monitor ile yerel bir hedef sunucuya karşı: hedef tarafında aynı anda işlenen istek sayısı iki tam döngü boyunca hiç 5'i geçmedi; hata kodları doğru; kapanışta devam eden kontroller yazılıp process çıktı.
 
 ### HTTP kontrolü
 - `undici.request` kullanılır (native fetch'te redirect sayısı sabit 20, değiştirilemiyor). `GET`, User-Agent `PingPulse-Monitor/1.0`.
 - Timeout: `CHECK_TIMEOUT_MS` (AbortSignal). Süre bütün yönlendirme zinciri için geçerlidir. **Timeout gerçek bir iptaldir:** `Promise.race` ile kurulan bir timeout sadece beklemeyi bırakır, istek arka planda devam eder. `AbortSignal` ise socket'i de kapatır, böylece slot ve bağlantı gerçekten serbest kalır. [NodeJS-Async-Concurrency §14]
 - **Yönlendirmeler elle takip edilir:** `undici.request` yönlendirmeleri kendisi takip etmez. 3xx gelirse `Location` çözülür, hedef SSRF kontrolünden geçer, en fazla 5 adım izlenir. 5 adım aşılırsa sonuç `HTTP_ERROR` olur.
 - **`responseTimeMs`** = isteğin başlangıcından **son** yanıtın header'larının gelmesine kadar geçen süre (DNS + TCP + TLS + sunucu işleme, yönlendirmeler dahil).
-- **Body bırakma:** Header'lar gelince her yanıtta (yönlendirmeler dahil) `res.body.dump({ limit: 64 KB })` çağrılır. Bu çağrı yapılmazsa socket keep-alive havuzuna dönmez ve bağlantılar sızar.
+- **Body bırakma:** Header'lar gelince her yanıtta (yönlendirmeler dahil) `res.body.dump({ limit: 64 KB, signal })` çağrılır. Bu çağrı yapılmazsa socket keep-alive havuzuna dönmez ve bağlantılar sızar. Body'nin (ilk 64 KB'ı) süre içinde gelmemesi de `TIMEOUT` sayılır: yanıtını tamamlayamayan site "ayakta" kaydedilmez.
+- undici'nin kendi iç timeout'ları (`UND_ERR_CONNECT_TIMEOUT` vb., bağlantı için varsayılan 10 sn) da `TIMEOUT` olarak eşlenir.
 - **UP:** son yanıtın durum kodu 200–399 aralığında.
 - **errorCode:** `TIMEOUT`, `DNS_ERROR`, `CONN_REFUSED`, `TLS_ERROR`, `HTTP_ERROR` (beklenmeyen durum kodu), `BLOCKED_TARGET` (SSRF), `UNKNOWN`.
 - Ölçüme yazılacak plan `company_plans` koleksiyonundan okunur ve bellekte 30 sn cache'lenir.
