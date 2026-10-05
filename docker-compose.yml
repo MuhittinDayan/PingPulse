@@ -82,6 +82,25 @@ services:
       retries: 10
       start_period: 10s
 
+  # API ile aynı imaj, farklı giriş noktası. API sağlıklı olmadan başlamaz: koleksiyonları API
+  # oluşturur; worker da açılışta setup'ı çalıştırır ama ikisinin yarışmasına gerek kalmaz.
+  monitoring-worker:
+    build:
+      context: .
+      dockerfile: services/monitoring/Dockerfile
+    command: ["node", "dist/worker.js"]
+    environment:
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/monitoring}
+      CHECK_CONCURRENCY: ${CHECK_CONCURRENCY:-10}
+      CHECK_INTERVAL_SECONDS: ${CHECK_INTERVAL_SECONDS:-60}
+      CHECK_TIMEOUT_MS: ${CHECK_TIMEOUT_MS:-5000}
+      WORKER_TICK_MS: ${WORKER_TICK_MS:-1000}
+      # DNS çözümlemesi libuv thread pool'unu kullanır (varsayılan 4); CHECK_CONCURRENCY'den küçük olmamalı.
+      UV_THREADPOOL_SIZE: ${UV_THREADPOOL_SIZE:-16}
+    depends_on:
+      monitoring-api:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   mongo-data:
