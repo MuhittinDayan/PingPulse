@@ -1,11 +1,11 @@
 import { MongoClient } from 'mongodb';
-import { loadEnv } from './config/env';
+import { loadApiEnv } from './config/env';
 import { setupDatabase } from './database/setup';
 import { TokenVerifier } from './utils/jwt';
 import { createApp } from './app';
 
 async function main(): Promise<void> {
-  const env = loadEnv();
+  const env = loadApiEnv();
 
   const mongo = new MongoClient(env.MONGO_URL);
   await mongo.connect();
