@@ -23,8 +23,8 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     return;
   }
 
-  // express.json() hataları: istemci kaynaklıdır, 500 değil kendi 4xx kodlarıyla dönülür.
-  if (typeof error?.type === 'string' && error.status >= 400 && error.status < 500) {
+  // Express'in kendi ürettiği istemci hataları (bozuk JSON, %FF gibi çözülemeyen URL) 4xx status taşır.
+  if (error?.status >= 400 && error.status < 500) {
     const known = bodyParserErrors[error.type] ?? { code: 'BAD_REQUEST', message: 'Bad request' };
     res.status(error.status).json({ statusCode: error.status, ...known });
     return;
