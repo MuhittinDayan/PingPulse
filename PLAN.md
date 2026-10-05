@@ -230,7 +230,8 @@ loop (her WORKER_TICK_MS):
 - **Silme tam zamanında olmaz:** TTL time series'te bucket bazında çalışır. Bir bucket'ın silinmesi için içindeki en yeni ölçümün süresinin de dolmuş olması gerekir. Bucket aralığı 1 saate sabitlendiği için gecikme en fazla yaklaşık 1 saat + TTL monitör periyodu (60 sn) olur. Saklama süresi bir "silme eşiği" olarak düşünülmeli.
 - **Bu kurgu daha önce denendi [mongoDb-tsdb-test]:** Genel TTL ile metaField üzerindeki partial TTL'ler birlikte çalışıyor. Bir veriye ikisi birden uygulanırsa **süresi kısa olan** geçerli olur. Partial TTL süreyi yalnızca kısaltabilir, bu yüzden en uzun süre (90 gün) genel TTL olarak tanımlanır.
 - Not: `TSDB-Retention-Politikalari §16` time series için "plan başına ayrı koleksiyon gerekir" diyor. Biz ölçülmüş deney sonucunu esas alıyoruz: tek koleksiyon + partial TTL. Bu sayede plan başına ayrı koleksiyona yazma (routing) ve sorguların birden fazla koleksiyona dağılması gerekmiyor.
-- Bu davranış §12'deki testlerle (index tanımı + gerçek silme) projede de kanıtlanır.
+- Bu davranış §12'deki testlerle (index tanımı + gerçek silme) projede de kanıtlanır. Faz 4'te mongo:7.0 container'ında elle doğrulandı: FREE@8g, PRO@31g, ENTERPRISE@91g silindi; PRO@8g, ENTERPRISE@31g kaldı.
+- **Saklama süresi değişirse:** Sabit `config/retention.ts` içinde değiştirilip servis yeniden başlatılır. Setup koleksiyon TTL'ini `collMod` ile, partial TTL index'lerini **silip yeniden oluşturarak** eşitler. (Time series'te index TTL'i `collMod` ile değiştirilemez; bu denenerek görüldü.)
 - **İleride:** Ham veri silinmeden önce saatlik/günlük özet (downsampling) tutulabilir. Uzun vadeli trend sorguları için faydalı, ama kapsam dışı. [TSDB-Retention §3]
 
 ---
@@ -348,7 +349,7 @@ Beklenen 3 kayıt silinene kadar polling yapılır, ardından kalması gereken 2
 - Rol yok, bu yüzden herhangi bir kullanıcı planı değiştirebilir. Refresh token ve token iptali de yok (JWT 1 saat geçerli).
 - HS256 kullanılıyor. Production için RS256/JWKS önerilir. Compose'daki varsayılan secret'lar sadece geliştirme içindir.
 - Plan değişikliği senkron HTTP çağrısıyla yayılıyor. Nadiren geçici tutarsızlık olabilir, isteği tekrarlamak düzeltir. Production için outbox + mesaj kuyruğu önerilir.
-- Kontrol sürerken monitor silinirse o kontrolün ölçümü sahipsiz kalabilir. Zararsızdır, TTL ile temizlenir.
+- Kontrol sürerken monitor silinirse o kontrolün ölçümü sahipsiz kalabilir. Zararsızdır: aynı monitor için tekrar edilen DELETE (404 dönse de) ölçümleri temizler, aksi halde TTL ile silinir.
 - Domain sahipliği doğrulanmıyor. Bot korumalı siteler 403 dönebilir.
 - TTL silmesi en fazla yaklaşık 1 saat gecikebilir.
 - Plan bazlı kullanıcı/URL limitleri ve URL başına kontrol aralığı yok.
