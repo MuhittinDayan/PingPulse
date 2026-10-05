@@ -1,0 +1,7 @@
+packages:
+  - "services/*"
+  - "frontend"
+allowBuilds:
+  '@prisma/engines': true
+  bcrypt: true
+  prisma: true
