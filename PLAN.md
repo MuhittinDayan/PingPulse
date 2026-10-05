@@ -89,7 +89,7 @@ index:     users(company_id)   → şirketin kullanıcılarını listelemek içi
 ```
 { _id, companyId, name, url, normalizedUrl, isActive, nextCheckAt, createdAt }
 index: { companyId: 1, normalizedUrl: 1 } unique   → aynı şirkette aynı URL iki kez eklenemez
-normalizedUrl: şema ve host küçük harfe çevrilir, varsayılan port (80/443) ve fragment (#...) atılır, path ve query olduğu gibi kalır
+normalizedUrl: WHATWG URL ile çözülür (şema ve host küçük harf, varsayılan port 80/443 atılır, aynı karakterin farklı kodlamaları tek biçime iner), sonra fragment (#...) atılır. Query parametrelerinin sırası ve değerleri değiştirilmez.
 index: { isActive: 1, nextCheckAt: 1 }             → zamanı gelen monitor'leri bulmak için
 ```
 
@@ -282,6 +282,7 @@ PATCH /company/plan
 - `.env.example` dosyası değişken listesini dokümante eder ve commit edilir. `.env` dosyası `.gitignore`'dadır.
 - `NODE_ENV=production` iken hata yanıtlarında stack trace gösterilmez.
 - README'de "production'da secret'ları değiştirin, sızan bir secret git geçmişinden silinse bile rotate edilmelidir" notu olacak.
+- **Açık iş (teslimden önce):** Compose'daki `dev-only-*` varsayılanları kaldırılıp değerler `.env`'e taşınacak; `.env.example` sadece anahtar adlarını içerecek. Kod değişmez, sadece `docker-compose.yml` ve `.env.example` etkilenir. Geçmişteki değerler sahte olduğu için rotate gerekmez.
 
 | Değişken | Varsayılan | Servis |
 |---|---|---|
