@@ -61,6 +61,27 @@ services:
       retries: 10
       start_period: 10s
 
+  monitoring-api:
+    build:
+      context: .
+      dockerfile: services/monitoring/Dockerfile
+    environment:
+      PORT: 3002
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/monitoring}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
+    ports:
+      - "127.0.0.1:3002:3002"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
 volumes:
   postgres-data:
   mongo-data:
