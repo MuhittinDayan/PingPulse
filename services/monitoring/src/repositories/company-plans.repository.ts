@@ -14,4 +14,13 @@ export class CompanyPlansRepository {
     const document = await this.collection.findOne({ _id: companyId });
     return document?.plan ?? 'FREE';
   }
+
+  // Upsert: kayıt yoksa oluşturur, varsa günceller. Aynı çağrı tekrarlanırsa sonuç değişmez.
+  async upsertPlan(companyId: string, plan: Plan): Promise<void> {
+    await this.collection.updateOne(
+      { _id: companyId },
+      { $set: { plan, updatedAt: new Date() } },
+      { upsert: true },
+    );
+  }
 }

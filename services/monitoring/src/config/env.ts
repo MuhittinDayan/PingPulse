@@ -8,6 +8,7 @@ const sharedSchema = z.object({
 const apiSchema = sharedSchema.extend({
   PORT: z.coerce.number().int().positive().default(3002),
   JWT_SECRET: z.string().min(16, 'must be at least 16 characters'),
+  INTERNAL_TOKEN: z.string().min(16, 'must be at least 16 characters'),
   ALLOW_PRIVATE_TARGETS: z.stringbool().default(false),
 });
 

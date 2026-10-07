@@ -15,6 +15,7 @@ async function main(): Promise<void> {
   const app = createApp({
     db,
     tokens: new TokenVerifier(env.JWT_SECRET),
+    internalToken: env.INTERNAL_TOKEN,
     allowPrivateTargets: env.ALLOW_PRIVATE_TARGETS,
   });
   const server = app.listen(env.PORT, '0.0.0.0', (error) => {
