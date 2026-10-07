@@ -10,10 +10,6 @@ export class CompanyService {
     private readonly monitoring: MonitoringClient,
   ) {}
 
-  // Önce monitoring (idempotent upsert), sonra Postgres (PLAN §9).
-  // Aynı şirketin eşzamanlı plan değişiklikleri advisory lock ile sıraya girer; aksi halde
-  // iki tarafa yazma sırası ters düşüp ikisi de başarılı dönerken kalıcı tutarsızlık oluşabilir.
-  // Kilit satırı değil şirket ID'sinin hash'ini tutar: aynı şirketin diğer işlemleri bloklanmaz.
   async changePlan(companyId: string, input: ChangePlanInput): Promise<CompanyView> {
     return this.prisma.$transaction(
       async (tx) => {

@@ -2,7 +2,6 @@ import type { RequestHandler } from 'express';
 import type { z } from 'zod';
 import { AppError } from '../errors/app-error';
 
-// Geçerli body, şemanın dönüştürdüğü haliyle değiştirilir (küçük harf e-posta, bilinmeyen alanlar atılmış).
 export function validateBody(schema: z.ZodType): RequestHandler {
   return (req, _res, next) => {
     const result = schema.safeParse(req.body);

@@ -24,10 +24,7 @@ export type CheckResult = {
 export class HttpChecker {
   constructor(private readonly timeoutMs: number) {}
 
-  // Hata fırlatmaz: her sonuç (başarılı ya da değil) bir CheckResult olarak döner.
   async check(url: string): Promise<CheckResult> {
-    // Tek bir sinyal bütün yönlendirme zincirini kapsar. AbortSignal gerçek iptaldir:
-    // süre dolunca socket de kapanır, slot ve bağlantı serbest kalır.
     const signal = AbortSignal.timeout(this.timeoutMs);
     const startedAt = performance.now();
     let currentUrl = url;
@@ -40,8 +37,6 @@ export class HttpChecker {
           signal,
         });
         const responseTimeMs = Math.round(performance.now() - startedAt);
-        // Body okunmadan bırakılır; bırakılmazsa socket havuza dönmez ve bağlantı sızar.
-        // dump() hataları yutar: body süre içinde gelmediyse bunu sinyalden anlarız.
         await response.body.dump({ limit: BODY_DUMP_LIMIT, signal });
         if (signal.aborted) {
           return timedOut();
@@ -61,7 +56,7 @@ export class HttpChecker {
           errorCode: isUp ? null : 'HTTP_ERROR',
         };
       }
-      return { isUp: false, statusCode: null, responseTimeMs: null, errorCode: 'HTTP_ERROR' }; // çok fazla yönlendirme
+      return { isUp: false, statusCode: null, responseTimeMs: null, errorCode: 'HTTP_ERROR' };
     } catch (error) {
       if (signal.aborted) {
         return timedOut();
@@ -79,7 +74,6 @@ function isRedirect(statusCode: number): boolean {
   return statusCode >= 300 && statusCode < 400;
 }
 
-// undici'nin kendi iç timeout'ları (örn. bağlantı için varsayılan 10 sn) CHECK_TIMEOUT_MS'den önce dolabilir.
 const UNDICI_TIMEOUT_CODES = new Set([
   'UND_ERR_CONNECT_TIMEOUT',
   'UND_ERR_HEADERS_TIMEOUT',

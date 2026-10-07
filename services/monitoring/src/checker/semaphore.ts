@@ -1,5 +1,3 @@
-// Aynı anda en fazla `max` işin çalışmasını sağlar. Bekleme kuyruğu yoktur: slot yoksa
-// iş hiç alınmaz (monitor claim edilmez), böylece bellekte sınırsız bir kuyruk birikmez.
 export class Semaphore {
   private active = 0;
 

@@ -1,4 +1,1 @@
-# Repodaki tüm metin dosyaları LF satır sonuyla saklanır.
-# Windows'ta CRLF ile kaydedilen bir .sh dosyası Linux container'ında
-# "bad interpreter" hatasıyla çalışmaz.
 * text=auto eol=lf

@@ -17,7 +17,6 @@ export class AuthService {
   async register(input: RegisterInput) {
     const passwordHash = await hashPassword(input.password);
     try {
-      // İç içe create tek transaction'dır: kullanıcı oluşamazsa şirket de oluşmaz.
       const user = await this.prisma.user.create({
         data: {
           email: input.email,

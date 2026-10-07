@@ -30,8 +30,6 @@ export class Scheduler {
     void this.fillSlots();
   }
 
-  // Yeni monitor alınmaz. Önce o an süren claim (varsa) beklenir, çünkü o da bir kontrol
-  // başlatabilir; sonra başlamış bütün kontrollerin bitmesi beklenir.
   async stop(): Promise<void> {
     this.stopping = true;
     clearInterval(this.timer);
@@ -39,8 +37,6 @@ export class Scheduler {
     await Promise.allSettled(this.inFlight);
   }
 
-  // Hem her tick'te hem de bir kontrol bitip slot boşaldığında çağrılır.
-  // Aynı anda tek bir doldurma döngüsü çalışır.
   private fillSlots(): Promise<void> {
     if (this.stopping) {
       return Promise.resolve();
@@ -51,7 +47,6 @@ export class Scheduler {
     return this.filling;
   }
 
-  // Boş slot olduğu sürece zamanı gelmiş monitor alır ve kontrolünü başlatır (beklemeden).
   private async fillLoop(): Promise<void> {
     while (!this.stopping && this.semaphore.tryAcquire()) {
       let monitor: MonitorDocument | null;
@@ -66,8 +61,6 @@ export class Scheduler {
         this.semaphore.release();
         return;
       }
-      // Claim sürerken stop() çağrılmış olabilir; alınmış monitor yine de kontrol edilir
-      // ve stop() onu da bekler (önce bu döngüyü, sonra inFlight'ı).
       this.launch(monitor);
     }
   }
@@ -81,7 +74,6 @@ export class Scheduler {
     this.inFlight.add(run);
   }
 
-  // Hiçbir hata dışarı sızmaz: bir monitor'deki sorun diğerlerini ve döngüyü etkilemez.
   private async runCheck(monitor: MonitorDocument): Promise<void> {
     try {
       const startedAt = new Date();

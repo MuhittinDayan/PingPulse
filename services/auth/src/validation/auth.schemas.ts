@@ -8,7 +8,6 @@ export const registerSchema = z.object({
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 
-// Girişte şifre kuralları uygulanmaz: kurallar değişirse eski kullanıcılar dışarıda kalmasın.
 export const loginSchema = z.object({
   email: emailSchema,
   password: z.string().min(1),

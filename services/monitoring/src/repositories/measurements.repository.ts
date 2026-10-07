@@ -14,7 +14,6 @@ export type CheckErrorCode =
 
 export type MeasurementDocument = {
   timestamp: Date;
-  // plan: ölçümün yazıldığı andaki plan. TTL index'leri buna göre siler (PLAN §9, snapshot).
   meta: { companyId: string; monitorId: string; plan: Plan };
   isUp: boolean;
   statusCode: number | null;

@@ -1,18 +1,13 @@
-# Bağımlılıklar ve build çıktıları
 node_modules/
 dist/
 coverage/
 
-# Prisma'nın ürettiği client: build sırasında 'prisma generate' ile yeniden üretilir
 **/src/generated/
 
-# Ortam değişkenleri: gizli bilgi içerir, asla commit edilmez.
-# .env.example ise şablondur ve commit edilir.
 .env
 .env.*
 !.env.example
 
-# Loglar ve sistem dosyaları
 *.log
 .DS_Store
 Thumbs.db

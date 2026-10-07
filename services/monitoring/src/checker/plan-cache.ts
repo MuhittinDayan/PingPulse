@@ -3,8 +3,6 @@ import type { CompanyPlansRepository } from '../repositories/company-plans.repos
 
 const CACHE_TTL_MS = 30_000;
 
-// Her ölçümde DB'ye plan sorgusu atmamak için planlar 30 sn bellekte tutulur.
-// Plan değişikliği en geç 30 sn içinde yansır (PLAN §9: snapshot politikasında kabul edilebilir).
 export class PlanCache {
   private readonly entries = new Map<string, { plan: Plan; expiresAt: number }>();
   private lastSweepAt = 0;
@@ -22,7 +20,6 @@ export class PlanCache {
     return plan;
   }
 
-  // Artık kontrol edilmeyen şirketlerin kayıtları birikmesin diye TTL periyodunda bir temizlenir.
   private sweepExpired(now: number): void {
     if (now - this.lastSweepAt < CACHE_TTL_MS) {
       return;

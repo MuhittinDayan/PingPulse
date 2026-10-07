@@ -13,7 +13,6 @@ export type MonitorDocument = {
   createdAt: Date;
 };
 
-// API'nin kullandığı her sorgu companyId ister. Tek istisna worker'ın claimNextDue sorgusu.
 export class MonitorsRepository {
   constructor(private readonly collection: Collection<MonitorDocument>) {}
 
@@ -32,10 +31,6 @@ export class MonitorsRepository {
     return result.deletedCount === 1;
   }
 
-  // Worker'a özel, şirketten bağımsız sistem sorgusu: zamanı gelmiş en eski monitor'ü alır
-  // ve bir sonraki kontrol zamanını aynı işlemde ileri atar. İki worker aynı anda çağırsa
-  // bile MongoDB doküman güncellemesini atomik yaptığı için monitor'ü sadece biri alır.
-  // Dönen doküman güncelleme ÖNCESİ halidir; nextCheckAt planlanan kontrol zamanıdır.
   claimNextDue(now: Date, intervalMs: number): Promise<MonitorDocument | null> {
     return this.collection.findOneAndUpdate(
       { isActive: true, nextCheckAt: { $lte: now } },

@@ -1,6 +1,3 @@
-# Build context repo köküdür, çünkü pnpm-lock.yaml orada.
-# API ve worker aynı imajı kullanır; sadece başlatma komutları farklıdır.
-
 FROM node:24-slim AS build
 RUN npm install -g pnpm@12.9.1
 WORKDIR /repo

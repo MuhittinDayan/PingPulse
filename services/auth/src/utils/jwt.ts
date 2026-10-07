@@ -10,7 +10,6 @@ const claimsSchema = z.object({
 
 export type AuthUser = z.infer<typeof claimsSchema>;
 
-// Süresiz (exp'siz) token kabul edilmez.
 const verifiedTokenSchema = claimsSchema.extend({ iat: z.number(), exp: z.number() });
 
 type ExpiresIn = `${number}${'s' | 'm' | 'h' | 'd'}`;

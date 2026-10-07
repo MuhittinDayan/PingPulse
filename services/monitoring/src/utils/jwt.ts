@@ -2,7 +2,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { AppError } from '../errors/app-error';
 
-// Token'ı auth-service imzalar; bu servis sadece doğrular.
 const verifiedTokenSchema = z.object({
   sub: z.uuid(),
   companyId: z.uuid(),

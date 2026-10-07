@@ -1,5 +1,3 @@
-// Yanıtlarda alanlar tek tek seçilir; passwordHash gibi alanlar yanlışlıkla dışarı sızmasın.
-
 export type UserView = { id: string; email: string; createdAt: Date };
 export type CompanyView = { id: string; name: string; plan: string };
 

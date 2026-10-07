@@ -4,7 +4,6 @@ generator client {
   moduleFormat = "cjs"
 }
 
-// Bağlantı adresi prisma.config.ts'ten gelir.
 datasource db {
   provider = "postgresql"
 }
@@ -28,7 +27,6 @@ model Company {
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   companyId    String   @map("company_id") @db.Uuid
-  // Uygulama küçük harfe çevirerek yazar; UNIQUE buna güvenir.
   email        String   @unique
   passwordHash String   @map("password_hash")
   createdAt    DateTime @default(now()) @map("created_at")

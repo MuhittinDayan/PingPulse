@@ -20,9 +20,6 @@ const workerSchema = sharedSchema
     WORKER_TICK_MS: z.coerce.number().int().min(100).default(1000),
     UV_THREADPOOL_SIZE: z.coerce.number().int().min(1).default(4),
   })
-  // DNS çözümlemesi libuv thread pool'unu kullanır. Pool eşzamanlı kontrol sayısından küçükse
-  // yavaş bir DNS sunucusu diğer kontrolleri bekletir. Pool boyutu process başladıktan sonra
-  // değiştirilemediği için yanlış ayarda worker hiç açılmaz.
   .refine((env) => env.UV_THREADPOOL_SIZE >= env.CHECK_CONCURRENCY, {
     message: 'must be greater than or equal to CHECK_CONCURRENCY',
     path: ['UV_THREADPOOL_SIZE'],

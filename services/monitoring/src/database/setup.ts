@@ -5,14 +5,11 @@ import { MEASUREMENTS_COLLECTION } from '../repositories/measurements.repository
 
 const NAMESPACE_EXISTS = 48;
 
-// Partial TTL süreyi sadece kısaltabilir; en uzun süre (ENTERPRISE) koleksiyon TTL'idir.
 const TTL_INDEXES = [
   { name: 'ttl_free', plan: 'FREE', expireAfterSeconds: RETENTION_SECONDS.FREE },
   { name: 'ttl_pro', plan: 'PRO', expireAfterSeconds: RETENTION_SECONDS.PRO },
 ] as const;
 
-// API ve worker iş başlamadan önce çağırır. Her adım idempotent'tir; saklama süreleri
-// değişirse mevcut TTL'ler yeni değerlere çekilir.
 export async function setupDatabase(db: Db): Promise<void> {
   await db.collection(MONITORS_COLLECTION).createIndexes([
     { key: { companyId: 1, normalizedUrl: 1 }, name: 'company_url_unique', unique: true },
@@ -43,8 +40,6 @@ async function ensureMeasurementsCollection(db: Db): Promise<void> {
     }
   }
 
-  // Koleksiyon önceden bir insertOne ile normal koleksiyon olarak oluşmuşsa
-  // time series ve TTL sessizce devre dışı kalır. Bu durumda çalışmaya devam edilmez.
   const [info] = await db
     .listCollections({ name: MEASUREMENTS_COLLECTION }, { nameOnly: false })
     .toArray();
@@ -63,8 +58,6 @@ async function ensureMeasurementsCollection(db: Db): Promise<void> {
   }
 }
 
-// Time series'te TTL index süresi collMod ile değiştirilemez; süre farklıysa index
-// silinip yeniden oluşturulur. Aradaki kısa anda silme sadece bir sonraki TTL turuna kayar.
 async function syncTtlIndexes(db: Db): Promise<void> {
   const collection = db.collection(MEASUREMENTS_COLLECTION);
   const existing = await collection.indexes();
