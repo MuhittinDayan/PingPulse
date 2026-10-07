@@ -47,7 +47,7 @@ Kararlar `backend-development-docs` klasöründeki notlarla uyumlu tutulmuştur.
 **`db/setup` (api ve worker iş başlamadan önce çağırır):** Koleksiyonları ve index'leri idempotent şekilde oluşturur. `measurements` zaten varsa `listCollections` ile tipinin `timeseries` olduğunu kontrol eder. Değilse process açık bir hatayla durur.
 Bu kontrol neden gerekli: Worker, koleksiyon oluşturulmadan `insertOne` yaparsa MongoDB `measurements`'ı **normal koleksiyon** olarak otomatik oluşturur. Bu durumda time series ve TTL hiçbir hata vermeden devre dışı kalır.
 
-Kurulum: `docker-compose up` (ya da `docker compose up --build`). İmaj yoksa ilk açılışta build otomatik yapılır. `.env` dosyası gerekmez, compose'da geliştirme amaçlı varsayılan değerler var (§11).
+Kurulum: `cp .env.example .env`, secret'ları doldur, `docker-compose up`. İmaj yoksa ilk açılışta build otomatik yapılır (§11).
 
 ---
 
@@ -282,18 +282,19 @@ PATCH /company/plan
 ## 11. Konfigürasyon (env)
 
 İki katmanlı kural [Environment-Variables]:
-- **Compose katmanı:** Bütün değişkenlerin compose dosyasında **geliştirme amaçlı varsayılanı** var (`${JWT_SECRET:-dev-only-jwt-secret}` gibi), böylece `.env` olmadan da sistem ayağa kalkar.
+- **Compose katmanı:** Secret olmayan değişkenlerin compose'da varsayılanı var. Secret'lar (`POSTGRES_PASSWORD`, `JWT_SECRET`, `INTERNAL_TOKEN`) `${VAR:?...}` ile zorunlu; `.env` yoksa ya da değer boşsa compose açık bir mesajla durur. Repoda hiçbir secret değeri yoktur.
 - **Uygulama katmanı (fail-fast):** Her servis açılışta env değişkenlerini Zod şemasıyla doğrular. Zorunlu bir değişken eksikse ya da hatalıysa (örneğin `CHECK_CONCURRENCY=abc`) servis hangi değişkenin sorunlu olduğunu yazıp hemen durur. `undefined` ile çalışmaya devam etmez.
 - `.env.example` dosyası değişken listesini dokümante eder ve commit edilir. `.env` dosyası `.gitignore`'dadır.
 - `NODE_ENV=production` iken hata yanıtlarında stack trace gösterilmez.
 - README'de "production'da secret'ları değiştirin, sızan bir secret git geçmişinden silinse bile rotate edilmelidir" notu olacak.
-- **Açık iş (teslimden önce):** Compose'daki `dev-only-*` varsayılanları kaldırılıp değerler `.env`'e taşınacak; `.env.example` sadece anahtar adlarını içerecek. Kod değişmez, sadece `docker-compose.yml` ve `.env.example` etkilenir. Geçmişteki değerler sahte olduğu için rotate gerekmez.
+- **Yapıldı:** Önceki commit'lerdeki `dev-only-*` geliştirme varsayılanları kaldırıldı, secret'lar `.env`'e taşındı; `.env.example` secret değerlerini boş bırakır. Geçmişteki değerler sahte olduğu için rotate gerekmez.
 
 | Değişken | Varsayılan | Servis |
 |---|---|---|
-| `JWT_SECRET` | `dev-only-jwt-secret` | auth, monitoring |
+| `JWT_SECRET` | **zorunlu** (`.env`) | auth, monitoring |
 | `JWT_EXPIRES_IN` | `1h` | auth |
-| `INTERNAL_TOKEN` | `dev-only-internal-token` | auth, monitoring |
+| `INTERNAL_TOKEN` | **zorunlu** (`.env`) | auth, monitoring |
+| `POSTGRES_PASSWORD` | **zorunlu** (`.env`) | postgres, auth |
 | `DATABASE_URL` | compose'daki postgres | auth |
 | `MONITORING_URL` | `http://monitoring-api:3002` | auth |
 | `MONGO_URL` | compose'daki mongo | monitoring |
@@ -349,16 +350,18 @@ Beklenen 3 kayıt silinene kadar polling yapılır, ardından kalması gereken 2
 
 - **At-most-once:** Worker claim'den hemen sonra çökerse o aralıktaki kontrol atlanır.
 - **Toplu kesinti:** Sitelerin çoğu timeout'a düşerse kapasite N / timeout'a iner (N=10, 5 sn için saniyede 2 kontrol) ve kontroller gecikir. Gecikme `scheduleLagMs` ile ölçülüyor.
-- Retry slotu tutuyor (sadece hızlı dönen hatalarda). Gecikmeli bir kuyruk ile iyileştirilebilir.
+- Retry henüz uygulanmadı. §7'deki retry kuralları planlanan davranışı tarif eder.
 - Rol yok, bu yüzden herhangi bir kullanıcı planı değiştirebilir. Refresh token ve token iptali de yok (JWT 1 saat geçerli).
-- HS256 kullanılıyor. Production için RS256/JWKS önerilir. Compose'daki varsayılan secret'lar sadece geliştirme içindir.
+- HS256 kullanılıyor. Production için RS256/JWKS önerilir. Secret'lar `.env` üzerinden zorunlu alınır; Compose'da varsayılan secret yoktur.
 - Plan değişikliği senkron HTTP çağrısıyla yayılıyor. Monitoring yazıp geç yanıt verirse ya da Postgres güncellemesi başarısız olursa iki taraf ayrışabilir; kullanıcı 503 görür ve isteği tekrarlaması düzeltir. Production için outbox + mesaj kuyruğu ya da periyodik uzlaştırma önerilir.
 - Internal endpoint (`/internal/*`) public API ile aynı portta; sadece `X-Internal-Token` ile korunuyor. Production'da ayrı bir port ya da ağ seviyesinde kısıtlama önerilir.
 - Kontrol sürerken monitor silinirse o kontrolün ölçümü sahipsiz kalabilir. Zararsızdır: aynı monitor için tekrar edilen DELETE (404 dönse de) ölçümleri temizler, aksi halde TTL ile silinir.
 - Domain sahipliği doğrulanmıyor. Bot korumalı siteler 403 dönebilir.
 - TTL silmesi en fazla yaklaşık 1 saat gecikebilir.
 - Plan bazlı kullanıcı/URL limitleri ve URL başına kontrol aralığı yok.
-- Frontend token'ı bellekte tutuyor (sayfa yenilenince yeniden giriş gerekiyor). HttpOnly cookie + SameSite + refresh token rotation daha güvenli bir yapı.
+- Frontend henüz uygulanmadı. Planlanan frontend token'ı bellekte tutacak (sayfa yenilenince yeniden giriş gerekecek). HttpOnly cookie + SameSite + refresh token rotation daha güvenli bir yapı.
+- SSRF istek anı kontrolü henüz uygulanmadı. §7'deki DNS ve yönlendirme kontrolleri planlanan davranıştır; mevcut koruma URL eklenirken literal özel/yerel adresleri reddeder.
+- 24 saatlik rapor endpoint'i ve otomatik testler henüz uygulanmadı.
 - Downsampling (saatlik/günlük özet) yok. Ham veri silinince geçmiş trend de kayboluyor.
 
 ---
