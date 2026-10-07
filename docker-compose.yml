@@ -48,6 +48,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-pingpulse}:${POSTGRES_PASSWORD:-dev-only-postgres-password}@postgres:5432/${POSTGRES_DB:-auth}}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      # Plan değişikliğinde çağrılan monitoring internal API'si ve ortak secret'ı.
+      MONITORING_URL: ${MONITORING_URL:-http://monitoring-api:3002}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-only-internal-token}
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
@@ -69,6 +72,7 @@ services:
       PORT: 3002
       MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/monitoring}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-dev-only-internal-token}
       ALLOW_PRIVATE_TARGETS: ${ALLOW_PRIVATE_TARGETS:-false}
     ports:
       - "127.0.0.1:3002:3002"
