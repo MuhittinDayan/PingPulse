@@ -9,6 +9,8 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+[smhd]$/, 'must look like 15m, 1h or 7d')
     .default('1h'),
+  MONITORING_URL: z.url({ protocol: /^https?$/ }).default('http://monitoring-api:3002'),
+  INTERNAL_TOKEN: z.string().min(16, 'must be at least 16 characters'),
 });
 
 export type Env = z.infer<typeof envSchema>;
