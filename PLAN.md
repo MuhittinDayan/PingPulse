@@ -66,7 +66,7 @@ Kurulum: `docker-compose up` (ya da `docker compose up --build`). İmaj yoksa il
 | **Native `mongodb` driver** | Time series seçenekleri, partial TTL index ve aggregation üzerinde tam kontrol sağlar. Mongoose bu detayları gizliyor. |
 | **undici** | Node'un kendi HTTP motoru. `lookup` hook'u ile SSRF kontrolü, `AbortSignal` ile kesin timeout. |
 | **JWT HS256** | Tek ortak secret ile kurulumu basit. RS256 production önerisi olarak README'de belirtilecek. |
-| **Jest + Supertest + mongodb-memory-server** | Integration testleri mock'lanmış DB yerine canlı ortamla **aynı sürümde** (7.0) gerçek ama geçici bir mongod ile çalışır. [Yazılım-test-turleri §4] |
+| **`node:test` + tsx + Supertest + mongodb-memory-server** | Node'un yerleşik test aracı (Node 20'den beri kararlı): `describe/it`, `assert`, mock ve sahte zamanlayıcı ek framework olmadan gelir. `tsx` sadece testleri çalıştırırken TypeScript'i anında çevirir (geliştirme bağımlılığı, imaja girmez): `node --import tsx --test "test/**/*.test.ts"`. Integration testleri mock'lanmış DB yerine canlı ortamla **aynı sürümde** (7.0) gerçek ama geçici bir mongod ile çalışır. Snapshot test kullanılmaz: beklenen değerler açıkça yazılır, çünkü snapshot doğruluğu değil sadece değişmediği kontrol eder. (İlk planda Jest vardı; NestJS'in varsayılanı olduğu için seçilmişti, Express'e geçince gerekçesi kalmadı.) [Yazılım-test-turleri §4, §11] |
 
 ---
 
@@ -249,12 +249,14 @@ loop (her WORKER_TICK_MS):
 **Akış:**
 ```
 PATCH /company/plan
-  1. monitoring'e PUT /internal/companies/:id/plan atılır (idempotent upsert)
-       └─ başarısızsa → 503 döner, hiçbir şey değişmemiştir
-  2. Postgres'te companies.plan güncellenir
+  0. Transaction açılır, şirket için advisory lock alınır (pg_advisory_xact_lock(hashtext(companyId)))
+  1. monitoring'e PUT /internal/companies/:id/plan atılır (idempotent upsert, 3 sn timeout, yönlendirme takip edilmez)
+       └─ hata/timeout → 503 PLAN_SYNC_FAILED, Postgres değişmez (transaction geri alınır)
+  2. Postgres'te companies.plan güncellenir, transaction commit edilir, kilit bırakılır
 ```
-- Ağ çağrısı DB transaction'ının içinde **yapılmaz**. Aksi halde monitoring yavaş yanıt verdiğinde bağlantı ve satır kilidi de o süre boyunca tutulur.
-- **Nadir durum:** 1. adım başarılı olup 2. adım başarısız olursa iki taraf geçici olarak tutarsız kalır (monitoring yeni planda, auth eski planda). İstemci aynı isteği tekrarlar, PUT idempotent olduğu için tutarlılık geri gelir. Snapshot politikası sayesinde bu tutarsızlığın etkisi sadece birkaç ölçümün saklama süresidir. README'de belirtilecek.
+- **Neden advisory lock (Faz 6 revizyonu):** Kilit olmadan aynı şirket için eşzamanlı iki istek (PRO ve ENTERPRISE) iki tarafa ters sırayla yazabilir; ikisi de 200 dönerken Mongo ENTERPRISE, Postgres PRO kalır ve kimse tekrar denemediği için tutarsızlık kalıcı olur. Kilit aynı şirketin plan değişikliklerini sıraya sokar; birden fazla auth instance'ında da geçerlidir. Satırı değil hash'i kilitlediği için aynı şirketin diğer işlemleri (kullanıcı ekleme vb.) bloklanmaz. Elle doğrulandı: kilit tutulurken plan değişikliği bekledi, kullanıcı ekleme beklemedi; 30 turluk eşzamanlı testte tutarsızlık çıkmadı.
+- **Bedeli:** Monitoring çağrısı süresince (en fazla 3 sn) bir DB bağlantısı tutulur. İlk plandaki "ağ çağrısı transaction içinde yapılmaz" kuralından bilinçli sapma; plan değişikliği nadir bir işlem olduğu için kabul edildi.
+- **Nadir durum (kendiliğinden düzelmez, tekrar deneme ile düzelir):** Monitoring yazmayı yapıp (a) Postgres güncellemesi başarısız olursa ya da (b) yanıtı 3 sn'den geç verirse, monitoring yeni planda, auth eski planda kalır ve kullanıcı 503 görür. Kullanıcı isteği tekrarladığında PUT idempotent olduğu için iki taraf eşitlenir. Etkisi sadece bu arada yazılan ölçümlerin saklama süresidir. Kalıcı çözüm (outbox + uzlaştırma job'ı) bilinen eksiklerde.
 - Plan değişikliğinden sonra worker cache'i en geç 30 sn içinde yenilenir. Bu sürede yazılan birkaç ölçüm eski planla kaydedilir, snapshot politikasında bu kabul edilebilir bir durumdur.
 
 ---
@@ -350,7 +352,8 @@ Beklenen 3 kayıt silinene kadar polling yapılır, ardından kalması gereken 2
 - Retry slotu tutuyor (sadece hızlı dönen hatalarda). Gecikmeli bir kuyruk ile iyileştirilebilir.
 - Rol yok, bu yüzden herhangi bir kullanıcı planı değiştirebilir. Refresh token ve token iptali de yok (JWT 1 saat geçerli).
 - HS256 kullanılıyor. Production için RS256/JWKS önerilir. Compose'daki varsayılan secret'lar sadece geliştirme içindir.
-- Plan değişikliği senkron HTTP çağrısıyla yayılıyor. Nadiren geçici tutarsızlık olabilir, isteği tekrarlamak düzeltir. Production için outbox + mesaj kuyruğu önerilir.
+- Plan değişikliği senkron HTTP çağrısıyla yayılıyor. Monitoring yazıp geç yanıt verirse ya da Postgres güncellemesi başarısız olursa iki taraf ayrışabilir; kullanıcı 503 görür ve isteği tekrarlaması düzeltir. Production için outbox + mesaj kuyruğu ya da periyodik uzlaştırma önerilir.
+- Internal endpoint (`/internal/*`) public API ile aynı portta; sadece `X-Internal-Token` ile korunuyor. Production'da ayrı bir port ya da ağ seviyesinde kısıtlama önerilir.
 - Kontrol sürerken monitor silinirse o kontrolün ölçümü sahipsiz kalabilir. Zararsızdır: aynı monitor için tekrar edilen DELETE (404 dönse de) ölçümleri temizler, aksi halde TTL ile silinir.
 - Domain sahipliği doğrulanmıyor. Bot korumalı siteler 403 dönebilir.
 - TTL silmesi en fazla yaklaşık 1 saat gecikebilir.
@@ -415,6 +418,7 @@ PingPulse/
 │   │       ├── services/        ← iş mantığı
 │   │       ├── validation/      ← Zod şemaları
 │   │       ├── errors/          ← AppError + hata kodları
+│   │       ├── clients/         ← diğer servislere istek atan sınıflar (monitoring internal API)
 │   │       └── utils/           ← password, jwt
 │   └── monitoring/
 │       └── src/                 ← aynı katmanlar + worker.ts (worker girişi) ve checker/ (semaphore, http-checker, scheduler, ssrf)
